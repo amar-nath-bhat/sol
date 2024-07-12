@@ -1,7 +1,9 @@
 use crossterm::event::{read, Event, Event::Key, KeyCode::Char, KeyEvent, KeyModifiers};
+use std::io::Error;
+
 mod terminal;
 
-use terminal::Terminal;
+use terminal::{Position, Size, Terminal};
 
 pub struct Editor {
     should_quit: bool,
@@ -19,7 +21,7 @@ impl Editor {
         result.unwrap();
     }
 
-    fn repl(&mut self) -> Result<(), std::io::Error> {
+    fn repl(&mut self) -> Result<(), Error> {
         loop {
             self.refresh_screen()?;
             if self.should_quit {
@@ -43,23 +45,27 @@ impl Editor {
             }
         }
     }
-    fn refresh_screen(&self) -> Result<(), std::io::Error> {
+    fn refresh_screen(&self) -> Result<(), Error> {
+        Terminal::hide_cursor()?;
         if self.should_quit {
             Terminal::clear_screen()?;
-            print!("Goodbye.\r\n");
+            Terminal::print("Goodbye.\r\n")?;
         } else {
             Self::draw_rows()?;
-            Terminal::move_cursor_to(0, 0)?;
+            Terminal::move_cursor_to(Position { x: 0, y: 0 })?;
         }
+        Terminal::show_cursor()?;
+        Terminal::execute()?;
         Ok(())
     }
 
-    fn draw_rows() -> Result<(), std::io::Error> {
-        let size = Terminal::size()?.1;
-        for row in 0..size {
-            print!("~");
-            if row + 1 < size {
-                print!("\r\n");
+    fn draw_rows() -> Result<(), Error> {
+        let Size { height, .. } = Terminal::size()?;
+        for row in 0..height {
+            Terminal::clear_line()?;
+            Terminal::print("~")?;
+            if row + 1 < height {
+                Terminal::print("\r\n")?;
             }
         }
         Ok(())
