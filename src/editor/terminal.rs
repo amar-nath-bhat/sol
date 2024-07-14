@@ -1,4 +1,3 @@
-use core::fmt::Display;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::style::Print;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType};
@@ -60,8 +59,8 @@ impl Terminal {
         let width = width_u16 as usize;
         Ok(Size { height, width })
     }
-    pub fn print<T: Display>(message: T) -> Result<(), Error> {
-        Self::queue_command(Print(message))?;
+    pub fn print(str: &str) -> Result<(), Error> {
+        Self::queue_command(Print(str))?;
         Ok(())
     }
     pub fn execute() -> Result<(), Error> {

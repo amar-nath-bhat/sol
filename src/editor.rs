@@ -7,11 +7,10 @@ use crossterm::event::{
 use std::io::Error;
 
 mod terminal;
+mod view;
 
 use terminal::{Position, Size, Terminal};
-
-const NAME: &str = env!("CARGO_PKG_NAME");
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+use view::View;
 
 #[derive(Clone, Copy, Default)]
 struct Location {
@@ -112,7 +111,7 @@ impl Editor {
             Terminal::clear_screen()?;
             Terminal::print("Goodbye.\r\n")?;
         } else {
-            Self::draw_rows()?;
+            View::render()?;
             Terminal::move_caret_to(Position {
                 col: self.location.x,
                 row: self.location.y,
@@ -120,39 +119,6 @@ impl Editor {
         }
         Terminal::show_caret()?;
         Terminal::execute()?;
-        Ok(())
-    }
-
-    fn draw_rows() -> Result<(), Error> {
-        let Size { height, .. } = Terminal::size()?;
-        for row in 0..height {
-            Terminal::clear_line()?;
-            if row == height / 3 {
-                Self::print_welcome_msg()?;
-            } else {
-                Self::draw_empty_row()?;
-            }
-            if row + 1 < height {
-                Terminal::print("\r\n")?;
-            }
-        }
-        Ok(())
-    }
-
-    fn print_welcome_msg() -> Result<(), Error> {
-        let mut welcom_msg = format!("Welcome to {} -- Version {}!\r\n", NAME, VERSION);
-        let width = Terminal::size()?.width as usize;
-        let len = welcom_msg.len();
-        let padding = width.saturating_sub(len) / 2;
-        let spaces = " ".repeat(padding.saturating_sub(1));
-        welcom_msg = format!("~{}{}", spaces, welcom_msg);
-        welcom_msg.truncate(width);
-        Terminal::print(&welcom_msg)?;
-        Ok(())
-    }
-
-    fn draw_empty_row() -> Result<(), Error> {
-        Terminal::print("~")?;
         Ok(())
     }
 }
