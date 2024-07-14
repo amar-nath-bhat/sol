@@ -1,18 +1,28 @@
 use super::terminal::{Size, Terminal};
 use std::io::Error;
 
+mod buffer;
+use buffer::Buffer;
+
 const NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub struct View;
+#[derive(Default)]
+pub struct View {
+    buffer: Buffer,
+}
 
 impl View {
-    pub fn render() -> Result<(), Error> {
+    pub fn render(&self) -> Result<(), Error> {
         let Size { height, .. } = Terminal::size()?;
-        Terminal::clear_line()?;
-        Terminal::print("Hello, World!\r\n")?;
-        for row in 1..height {
+
+        for row in 0..height {
             Terminal::clear_line()?;
+            if let Some(line) = self.buffer.lines.get(row) {
+                Terminal::print(line)?;
+                Terminal::print("\r\n")?;
+                continue;
+            }
 
             #[allow(clippy::integer_division)]
             if row == height / 3 {
