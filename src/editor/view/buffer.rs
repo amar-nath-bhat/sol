@@ -1,9 +1,11 @@
 use std::fs::read_to_string;
 use std::io::Error;
 
+use super::line::Line;
+
 #[derive(Default)]
 pub struct Buffer {
-    pub lines: Vec<String>,
+    pub lines: Vec<Line>,
 }
 
 impl Buffer {
@@ -12,7 +14,7 @@ impl Buffer {
         let mut lines = Vec::new();
 
         for val in content.lines() {
-            lines.push(String::from(val));
+            lines.push(Line::from(val));
         }
         Ok(Self { lines })
     }
