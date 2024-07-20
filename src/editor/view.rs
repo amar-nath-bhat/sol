@@ -38,6 +38,7 @@ impl View {
             EditorCommand::Delete => self.delete(),
             EditorCommand::Backspace => self.delete_backward(),
             EditorCommand::Enter => self.insert_newline(),
+            EditorCommand::Save => self.save(),
         }
     }
     pub fn load(&mut self, file_name: &str) {
@@ -82,6 +83,10 @@ impl View {
             self.move_text_location(&Direction::Left);
             self.delete();
         }
+    }
+
+    fn save(&self) {
+        let _ = self.buffer.save();
     }
 
     fn resize(&mut self, to: Size) {
