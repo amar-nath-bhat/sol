@@ -4,14 +4,12 @@ use super::terminal::Size;
 
 pub trait UIComponent {
     fn set_needs_redraw(&mut self, value: bool);
-    // Determines if a component needs to be redrawn or not
     fn needs_redraw(&self) -> bool;
 
     fn resize(&mut self, size: Size) {
         self.set_size(size);
         self.set_needs_redraw(true);
     }
-
     fn set_size(&mut self, size: Size);
 
     fn render(&mut self, origin_y: usize) {
@@ -27,6 +25,5 @@ pub trait UIComponent {
             }
         }
     }
-    // Method to actually draw the component, must be implemented by each component
     fn draw(&mut self, origin_y: usize) -> Result<(), Error>;
 }

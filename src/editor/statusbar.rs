@@ -26,6 +26,7 @@ impl UIComponent for StatusBar {
     fn set_needs_redraw(&mut self, value: bool) {
         self.needs_redraw = value;
     }
+
     fn needs_redraw(&self) -> bool {
         self.needs_redraw
     }
@@ -43,12 +44,10 @@ impl UIComponent for StatusBar {
             self.current_status.file_name
         );
 
-        // Assemble the whole status bar, with the position indicator at the back
         let position_indicator = self.current_status.position_indicator_to_string();
         let remainder_len = self.size.width.saturating_sub(beginning.len());
         let status = format!("{beginning}{position_indicator:>remainder_len$}");
 
-        //Only print out the status if it fits. Otherwise write out an empty string to ensure the row is cleared.
         let to_print = if status.len() <= self.size.width {
             status
         } else {
