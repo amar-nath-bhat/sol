@@ -1,17 +1,14 @@
 use std::{cmp::min, io::Error};
 
-use self::line::Line;
-
 use super::{
     command::{Edit, Move},
-    terminal::{Position, Size, Terminal},
-    uicomponent::UIComponent,
-    DocumentStatus, NAME, VERSION,
+    DocumentStatus, Line, Position, Size, Terminal, UIComponent, NAME, VERSION,
 };
 mod buffer;
 use buffer::Buffer;
 
-mod line;
+mod fileinfo;
+use fileinfo::FileInfo;
 
 #[derive(Default)]
 pub struct View {
@@ -36,6 +33,10 @@ impl View {
             file_name: format!("{}", self.buffer.file_info),
             is_modified: self.buffer.dirty,
         }
+    }
+
+    pub const fn is_file_loaded(&self) -> bool {
+        self.buffer.is_file_loaded()
     }
 
     pub fn handle_edit_command(&mut self, command: Edit) {
@@ -111,6 +112,10 @@ impl View {
 
     pub fn save(&mut self) -> Result<(), Error> {
         self.buffer.save()
+    }
+
+    pub fn save_as(&mut self, file_name: &str) -> Result<(), Error> {
+        self.buffer.save_as(file_name)
     }
 
     fn render_line(at: usize, line_text: &str) -> Result<(), Error> {
@@ -256,17 +261,17 @@ impl UIComponent for View {
         self.scroll_text_location_into_view();
     }
 
-    fn draw(&mut self, origin_y: usize) -> Result<(), Error> {
+    fn draw(&mut self, origin_row: usize) -> Result<(), Error> {
         let Size { height, width } = self.size;
-        let end_y = origin_y.saturating_add(height);
+        let end_y = origin_row.saturating_add(height);
         // we allow this since we don't care if our welcome message is put _exactly_ in the top third.
         // it's allowed to be a bit too far up or down
         #[allow(clippy::integer_division)]
         let top_third = height / 3;
         let scroll_top = self.scroll_offset.row;
-        for current_row in origin_y..end_y {
+        for current_row in origin_row..end_y {
             let line_idx = current_row
-                .saturating_sub(origin_y)
+                .saturating_sub(origin_row)
                 .saturating_add(scroll_top);
             if let Some(line) = self.buffer.lines.get(line_idx) {
                 let left = self.scroll_offset.col;
