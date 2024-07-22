@@ -32,7 +32,6 @@ use self::command::{
     Edit::InsertNewline,
     System::{Dismiss, Quit, Resize, Save, Search},
 };
-
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -66,6 +65,8 @@ pub struct Editor {
 }
 
 impl Editor {
+    // region: struct lifecycle
+
     pub fn new() -> Result<Self, Error> {
         let current_hook = take_hook();
         set_hook(Box::new(move |panic_info| {
@@ -77,7 +78,7 @@ impl Editor {
         let mut editor = Self::default();
         let size = Terminal::size().unwrap_or_default();
         editor.handle_resize_command(size);
-        editor.update_message("HELP: Ctrl-F = search | Ctrl-S = save | Ctrl-Q = quit");
+        editor.update_message("HELP: Ctrl-K = search | Ctrl-S = save | Ctrl-Q = quit");
 
         let args: Vec<String> = env::args().collect();
         if let Some(file_name) = args.get(1) {
@@ -85,11 +86,13 @@ impl Editor {
                 editor.update_message(&format!("ERR: Could not open file: {file_name}"));
             }
         }
-
         editor.refresh_status();
         Ok(editor)
     }
 
+    // endregion
+
+    // region: Event Loop
     pub fn run(&mut self) {
         loop {
             self.refresh_screen();
@@ -163,13 +166,15 @@ impl Editor {
             }
         }
     }
+    // endregion
+
+    // region command handling
 
     fn process_command(&mut self, command: Command) {
         if let System(Resize(size)) = command {
             self.handle_resize_command(size);
             return;
         }
-
         match self.prompt_type {
             PromptType::Search => self.process_command_during_search(command),
             PromptType::Save => self.process_command_during_save(command),
@@ -194,6 +199,8 @@ impl Editor {
         }
     }
 
+    // region resize command handling
+
     fn handle_resize_command(&mut self, size: Size) {
         self.terminal_size = size;
         self.view.resize(Size {
@@ -209,6 +216,11 @@ impl Editor {
         self.command_bar.resize(bar_size);
     }
 
+    // endregion
+
+    // region quit command handling
+
+    // clippy::arithmetic_side_effects: quit_times is guaranteed to be between 0 and QUIT_TIMES
     #[allow(clippy::arithmetic_side_effects)]
     fn handle_quit_command(&mut self) {
         if !self.view.get_status().is_modified || self.quit_times + 1 == QUIT_TIMES {
@@ -222,13 +234,15 @@ impl Editor {
             self.quit_times += 1;
         }
     }
-
     fn reset_quit_times(&mut self) {
         if self.quit_times > 0 {
             self.quit_times = 0;
             self.update_message("");
         }
     }
+    // end region
+
+    // region save command & prompt handling
 
     fn handle_save_command(&mut self) {
         if self.view.is_file_loaded() {
@@ -237,7 +251,6 @@ impl Editor {
             self.set_prompt(PromptType::Save);
         }
     }
-
     fn process_command_during_save(&mut self, command: Command) {
         match command {
             System(Quit | Resize(_) | Search | Save) | Move(_) => {} // Not applicable during save, Resize already handled at this stage
@@ -266,6 +279,9 @@ impl Editor {
         }
     }
 
+    // endregion
+
+    // region search command & prompt handling
     fn process_command_during_search(&mut self, command: Command) {
         match command {
             System(Quit | Resize(_) | Search | Save) | Move(_) => {} // Not applicable during save, Resize already handled at this stage
@@ -273,11 +289,15 @@ impl Editor {
             Edit(edit_command) => self.command_bar.handle_edit_command(edit_command),
         }
     }
+    // endregion
 
+    // region message & command bar
     fn update_message(&mut self, new_message: &str) {
         self.message_bar.update_message(new_message);
     }
+    // endregion
 
+    //region prompt handling
     fn in_prompt(&self) -> bool {
         !self.prompt_type.is_none()
     }
@@ -291,6 +311,7 @@ impl Editor {
         self.command_bar.clear_value();
         self.prompt_type = prompt_type;
     }
+    // end region
 }
 
 impl Drop for Editor {
