@@ -4,28 +4,24 @@ use std::{
     io::Error,
     panic::{set_hook, take_hook},
 };
+mod annotatedstring;
 mod command;
-mod commandbar;
 mod documentstatus;
 mod line;
-mod messagebar;
 mod position;
 mod size;
-mod statusbar;
 mod terminal;
-mod uicomponent;
-mod view;
+mod uicomponents;
 
-use commandbar::CommandBar;
+use annotatedstring::{AnnotatedString, AnnotationType};
+use uicomponents::{CommandBar, MessageBar, StatusBar, UIComponent, View};
+
 use documentstatus::DocumentStatus;
 use line::Line;
-use messagebar::MessageBar;
+
 use position::{Col, Position, Row};
 use size::Size;
-use statusbar::StatusBar;
 use terminal::Terminal;
-use uicomponent::UIComponent;
-use view::View;
 
 use self::command::{
     Command::{self, Edit, Move, System},

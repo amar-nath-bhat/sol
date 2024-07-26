@@ -1,35 +1,19 @@
 use std::{
-    fmt,
+    fmt::{self, Display},
     ops::{Deref, Range},
 };
+mod graphemewidth;
+mod textfragment;
+use graphemewidth::GraphemeWidth;
+use textfragment::TextFragment;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-#[derive(Copy, Clone)]
-enum GraphemeWidth {
-    Half,
-    Full,
-}
+use super::{AnnotatedString, AnnotationType, Col};
 
 type GraphemeIdx = usize;
 type ByteIdx = usize;
-
-impl GraphemeWidth {
-    const fn saturating_add(self, other: usize) -> usize {
-        match self {
-            Self::Half => other.saturating_add(1),
-            Self::Full => other.saturating_add(2),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct TextFragment {
-    grapheme: String,
-    rendered_width: GraphemeWidth,
-    replacement: Option<char>,
-    start_byte_idx: usize,
-}
+type ColIdx = usize;
 
 #[derive(Default, Clone)]
 pub struct Line {
@@ -96,29 +80,90 @@ impl Line {
             _ => None,
         }
     }
+    // Gets the visible graphemes in the given column index.
+    // Note that the column index is not the same as the grapheme index:
+    // A grapheme can have a width of 2 columns.
+    pub fn get_visible_graphemes(&self, range: Range<ColIdx>) -> String {
+        self.get_annotated_visible_substr(range, None, None)
+            .to_string()
+    }
 
-    pub fn get_visible_graphemes(&self, range: Range<GraphemeIdx>) -> String {
+    pub fn get_annotated_visible_substr(
+        &self,
+        range: Range<ColIdx>,
+        query: Option<&str>,
+        selected_match: Option<GraphemeIdx>,
+    ) -> AnnotatedString {
         if range.start >= range.end {
-            return String::new();
+            return AnnotatedString::default();
         }
-        let mut result = String::new();
-        let mut current_pos = 0;
-        for fragment in &self.fragments {
-            let fragment_end = fragment.rendered_width.saturating_add(current_pos);
-            if current_pos >= range.end {
+        // Create a new annotated string
+        let mut result = AnnotatedString::from(&self.string);
+        if let Some(query) = query {
+            if !query.is_empty() {
+                self.find_all(query, 0..self.string.len()).iter().for_each(
+                    |(start_byte_idx, grapheme_idx)| {
+                        if let Some(selected_match) = selected_match {
+                            if *grapheme_idx == selected_match {
+                                result.add_annotation(
+                                    AnnotationType::SelectedMatch,
+                                    *start_byte_idx,
+                                    start_byte_idx.saturating_add(query.len()),
+                                );
+                                return;
+                            }
+                        }
+                        result.add_annotation(
+                            AnnotationType::Match,
+                            *start_byte_idx,
+                            start_byte_idx.saturating_add(query.len()),
+                        );
+                    },
+                );
+            }
+        }
+        let mut fragment_start = self.width();
+        for fragment in self.fragments.iter().rev() {
+            let fragment_end = fragment_start;
+            fragment_start = fragment_start.saturating_sub(fragment.rendered_width.into());
+            if fragment_start > range.end {
+                continue; // No  processing needed if we haven't reached the visible range yet.
+            }
+            if fragment_start < range.end && fragment_end > range.end {
+                result.replace(fragment.start_byte_idx, self.string.len(), "⋯");
+                continue;
+            } else if fragment_start == range.end {
+                // Truncate right if we've reached the end of the visible range
+                result.replace(fragment.start_byte_idx, self.string.len(), "");
+                continue;
+            }
+            if fragment_end <= range.start {
+                result.replace(
+                    0,
+                    fragment
+                        .start_byte_idx
+                        .saturating_add(fragment.grapheme.len()),
+                    "",
+                );
+                break;
+            } else if fragment_start < range.start && fragment_end > range.start {
+                // Fragment overlaps with the start of range: Remove the left side of the string and add an ellipsis
+                result.replace(
+                    0,
+                    fragment
+                        .start_byte_idx
+                        .saturating_add(fragment.grapheme.len()),
+                    "⋯",
+                );
                 break;
             }
-            if fragment_end > range.start {
-                if fragment_end > range.end || current_pos < range.start {
-                    // Clip on the right or left
-                    result.push('⋯');
-                } else if let Some(char) = fragment.replacement {
-                    result.push(char);
-                } else {
-                    result.push_str(&fragment.grapheme);
+            if fragment_start >= range.start && fragment_end <= range.end {
+                if let Some(replacement) = fragment.replacement {
+                    let start_byte_idx = fragment.start_byte_idx;
+                    let end_byte_idx = start_byte_idx.saturating_add(fragment.grapheme.len());
+                    result.replace(start_byte_idx, end_byte_idx, &replacement.to_string());
                 }
             }
-            current_pos = fragment_end;
         }
         result
     }
@@ -126,7 +171,7 @@ impl Line {
     pub fn grapheme_count(&self) -> GraphemeIdx {
         self.fragments.len()
     }
-    pub fn width_until(&self, grapheme_idx: GraphemeIdx) -> GraphemeIdx {
+    pub fn width_until(&self, grapheme_idx: GraphemeIdx) -> Col {
         self.fragments
             .iter()
             .take(grapheme_idx)
@@ -136,11 +181,10 @@ impl Line {
             })
             .sum()
     }
-
-    pub fn width(&self) -> GraphemeIdx {
+    pub fn width(&self) -> Col {
         self.width_until(self.grapheme_count())
     }
-
+    // Inserts a character into the line, or appends it at the end if at == grapheme_count + 1
     pub fn insert_char(&mut self, character: char, at: GraphemeIdx) {
         debug_assert!(at.saturating_sub(1) <= self.grapheme_count());
         if let Some(fragment) = self.fragments.get(at) {
@@ -150,13 +194,11 @@ impl Line {
         }
         self.rebuild_fragments();
     }
-
     pub fn append_char(&mut self, character: char) {
         self.insert_char(character, self.grapheme_count());
     }
-
     pub fn delete(&mut self, at: GraphemeIdx) {
-        debug_assert!(at < self.grapheme_count());
+        debug_assert!(at <= self.grapheme_count());
         if let Some(fragment) = self.fragments.get(at) {
             let start = fragment.start_byte_idx;
             let end = fragment
@@ -185,27 +227,14 @@ impl Line {
             Self::default()
         }
     }
-
-    fn byte_idx_to_grapheme_idx(&self, byte_idx: ByteIdx) -> GraphemeIdx {
-        debug_assert!(byte_idx <= self.string.len());
+    fn byte_idx_to_grapheme_idx(&self, byte_idx: ByteIdx) -> Option<GraphemeIdx> {
+        if byte_idx > self.string.len() {
+            return None;
+        }
         self.fragments
             .iter()
             .position(|fragment| fragment.start_byte_idx >= byte_idx)
-            .map_or_else(
-                || {
-                    #[cfg(debug_assertions)]
-                    {
-                        panic!("Fragment not found for byte index: {byte_idx:?}");
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        0
-                    }
-                },
-                |grapheme_idx| grapheme_idx,
-            )
     }
-
     fn grapheme_idx_to_byte_idx(&self, grapheme_idx: GraphemeIdx) -> ByteIdx {
         debug_assert!(grapheme_idx <= self.grapheme_count());
         if grapheme_idx == 0 || self.grapheme_count() == 0 {
@@ -225,7 +254,6 @@ impl Line {
             |fragment| fragment.start_byte_idx,
         )
     }
-
     pub fn search_forward(
         &self,
         query: &str,
@@ -236,12 +264,10 @@ impl Line {
             return None;
         }
         let start_byte_idx = self.grapheme_idx_to_byte_idx(from_grapheme_idx);
-        self.string
-            .get(start_byte_idx..)
-            .and_then(|substr| substr.find(query))
-            .map(|byte_idx| self.byte_idx_to_grapheme_idx(byte_idx.saturating_add(start_byte_idx)))
+        self.find_all(query, start_byte_idx..self.string.len())
+            .first()
+            .map(|(_, grapheme_idx)| *grapheme_idx)
     }
-
     pub fn search_backward(
         &self,
         query: &str,
@@ -257,14 +283,31 @@ impl Line {
         } else {
             self.grapheme_idx_to_byte_idx(from_grapheme_idx)
         };
+        self.find_all(query, 0..end_byte_index)
+            .last()
+            .map(|(_, grapheme_idx)| *grapheme_idx)
+    }
+    fn find_all(&self, query: &str, range: Range<ByteIdx>) -> Vec<(ByteIdx, GraphemeIdx)> {
+        let end_byte_idx = range.end;
+        let start_byte_idx = range.start;
+
         self.string
-            .get(..end_byte_index)
-            .and_then(|substr| substr.match_indices(query).last())
-            .map(|(index, _)| self.byte_idx_to_grapheme_idx(index))
+            .get(start_byte_idx..end_byte_idx)
+            .map_or_else(Vec::new, |substr| {
+                substr
+                    .match_indices(query) // find _potential_ matches within the substring
+                    .filter_map(|(relative_start_idx, _)| {
+                        let absolute_start_idx = relative_start_idx.saturating_add(start_byte_idx); //convert their relative indices to absolute indices
+
+                        self.byte_idx_to_grapheme_idx(absolute_start_idx)
+                            .map(|grapheme_idx| (absolute_start_idx, grapheme_idx))
+                    })
+                    .collect()
+            })
     }
 }
 
-impl fmt::Display for Line {
+impl Display for Line {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "{}", self.string)
     }
