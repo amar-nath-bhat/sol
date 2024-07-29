@@ -4,7 +4,7 @@ use std::io::Write;
 
 use super::FileInfo;
 use super::Line;
-use super::Location;
+use crate::prelude::*;
 #[derive(Default)]
 pub struct Buffer {
     pub lines: Vec<Line>,
