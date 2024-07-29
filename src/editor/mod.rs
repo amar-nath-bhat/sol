@@ -68,7 +68,7 @@ impl Editor {
         let mut editor = Self::default();
         let size = Terminal::size().unwrap_or_default();
         editor.handle_resize_command(size);
-        editor.update_message("HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit");
+        editor.update_message("HELP: Ctrl-K = find | Ctrl-S = save | Ctrl-Q = quit");
 
         let args: Vec<String> = env::args().collect();
         if let Some(file_name) = args.get(1) {
