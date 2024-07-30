@@ -32,7 +32,6 @@ impl UIComponent for StatusBar {
         self.size = size;
     }
     fn draw(&mut self, origin_row: RowIdx) -> Result<(), Error> {
-        //Assemble the first part of the status bar
         let line_count = self.current_status.line_count_to_string();
         let modified_indicator = self.current_status.modified_indicator_to_string();
 
@@ -42,8 +41,13 @@ impl UIComponent for StatusBar {
         );
 
         let position_indicator = self.current_status.position_indicator_to_string();
+
+        let file_type = self.current_status.file_type_to_string();
+
+        let back_part = format!("{file_type} - {position_indicator}");
+
         let remainder_len = self.size.width.saturating_sub(beginning.len());
-        let status = format!("{beginning}{position_indicator:>remainder_len$}");
+        let status = format!("{beginning}{back_part:>remainder_len$}");
 
         let to_print = if status.len() <= self.size.width {
             status
