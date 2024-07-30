@@ -6,13 +6,17 @@ use std::{
     panic::{set_hook, take_hook},
 };
 mod annotatedstring;
+pub mod annotationtype;
 mod command;
 mod documentstatus;
 mod line;
 mod terminal;
 mod uicomponents;
 
-use annotatedstring::{AnnotatedString, AnnotationType};
+pub use annotationtype::AnnotationType;
+mod annotation;
+use annotatedstring::AnnotatedString;
+use annotation::Annotation;
 use documentstatus::DocumentStatus;
 use line::Line;
 use terminal::Terminal;
