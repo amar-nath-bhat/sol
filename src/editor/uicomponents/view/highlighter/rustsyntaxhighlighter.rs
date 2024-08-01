@@ -3,6 +3,73 @@ use crate::prelude::*;
 use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
 
+const KEYWORDS: [&str; 57] = [
+    "async",
+    "await",
+    "as",
+    "async",
+    "await",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "dyn",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "while",
+    "abstract",
+    "become",
+    "box",
+    "do",
+    "final",
+    "macro",
+    "override",
+    "priv",
+    "typeof",
+    "unsized",
+    "virtual",
+    "yield",
+    "union",
+    "macro_rules",
+    "include",
+    "include_str",
+    "option_env",
+];
+
+const TYPES: [&str; 22] = [
+    "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize", "f32",
+    "f64", "bool", "char", "Option", "Result", "String", "str", "Vec", "HashMap",
+];
+
+const KNOWN_VALUES: [&str; 6] = ["Some", "None", "true", "false", "Ok", "Err"];
+
 #[derive(Default)]
 pub struct RustSyntaxHighlighter {
     highlights: HashMap<LineIdx, Vec<Annotation>>,
@@ -12,9 +79,19 @@ impl SyntaxHighlighter for RustSyntaxHighlighter {
     fn highlight(&mut self, idx: LineIdx, line: &Line) {
         let mut result = Vec::new();
         for (start_idx, word) in line.split_word_bound_indices() {
+            let mut annotation_type = None;
             if is_valid_number(word) {
+                annotation_type = Some(AnnotationType::Number);
+            } else if is_keyword(word) {
+                annotation_type = Some(AnnotationType::Keyword);
+            } else if is_type(word) {
+                annotation_type = Some(AnnotationType::Type);
+            } else if is_known_value(word) {
+                annotation_type = Some(AnnotationType::KnownValue);
+            }
+            if let Some(annotation_type) = annotation_type {
                 result.push(Annotation {
-                    annotation_type: AnnotationType::Number,
+                    annotation_type,
                     start: start_idx,
                     end: start_idx.saturating_add(word.len()),
                 });
@@ -22,6 +99,7 @@ impl SyntaxHighlighter for RustSyntaxHighlighter {
         }
         self.highlights.insert(idx, result);
     }
+
     fn get_annotations(&self, idx: LineIdx) -> Option<&Vec<Annotation>> {
         self.highlights.get(&idx)
     }
@@ -93,6 +171,7 @@ fn is_numeric_literal(word: &str) -> bool {
         // Check the first character for a leading 0
         return false;
     }
+
     let base = match chars.next() {
         //Check the second character for a proper base
         Some('b' | 'B') => 2,
@@ -101,4 +180,16 @@ fn is_numeric_literal(word: &str) -> bool {
         _ => return false,
     };
     chars.all(|char| char.is_digit(base))
+}
+
+fn is_keyword(word: &str) -> bool {
+    KEYWORDS.contains(&word)
+}
+
+fn is_type(word: &str) -> bool {
+    TYPES.contains(&word)
+}
+
+fn is_known_value(word: &str) -> bool {
+    KNOWN_VALUES.contains(&word)
 }
