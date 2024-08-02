@@ -66,7 +66,7 @@ Here are some planned features and improvements for future:
 The information and inspiration for this project was sourced from the following references:
 
 - [Phillip's Blog](https://www.flenker.blog/hecto/)
-- [Rust Documentation](https://www.rust-lang.org/documentation)
+- [Rust Documentation](https://doc.rust-lang.org/book/)
 
 ## License
 
