@@ -73,6 +73,7 @@ const KNOWN_VALUES: [&str; 6] = ["Some", "None", "true", "false", "Ok", "Err"];
 pub struct RustSyntaxHighlighter {
     highlights: Vec<Vec<Annotation>>,
     ml_comment_balance: usize,
+    in_ml_string: bool,
 }
 impl RustSyntaxHighlighter {
     fn annotate_ml_comment(&mut self, string: &str) -> Option<Annotation> {
@@ -108,6 +109,57 @@ impl RustSyntaxHighlighter {
             end: string.len(),
         })
     }
+
+    fn annotate_string(&mut self, string: &str) -> Option<Annotation> {
+        let mut chars = string.char_indices();
+        while let Some((idx, char)) = chars.next() {
+            if char == '\\' && self.in_ml_string {
+                chars.next(); // Skip the escape character.
+                continue;
+            }
+            if char == '"' {
+                if self.in_ml_string {
+                    self.in_ml_string = false;
+                    return Some(Annotation {
+                        annotation_type: AnnotationType::String,
+                        start: 0,
+                        end: idx.saturating_add(1),
+                    });
+                }
+                self.in_ml_string = true;
+            }
+            if !self.in_ml_string {
+                return None;
+            }
+        }
+        self.in_ml_string.then_some(Annotation {
+            annotation_type: AnnotationType::String,
+            start: 0,
+            end: string.len(),
+        })
+    }
+
+    fn initial_annotation(&mut self, line: &Line) -> Option<Annotation> {
+        if self.in_ml_string {
+            self.annotate_string(line)
+        } else if self.ml_comment_balance > 0 {
+            self.annotate_ml_comment(line)
+        } else {
+            None
+        }
+    }
+
+    fn annotate_remainder(&mut self, remainder: &str) -> Option<Annotation> {
+        self.annotate_ml_comment(remainder)
+            .or_else(|| self.annotate_string(remainder))
+            .or_else(|| annotate_comment(remainder))
+            .or_else(|| annotate_char(remainder))
+            .or_else(|| annnotate_lifetime_specifiers(remainder))
+            .or_else(|| annotate_number(remainder))
+            .or_else(|| annotate_keyword(remainder))
+            .or_else(|| annotate_type(remainder))
+            .or_else(|| annotate_known_value(remainder))
+    }
 }
 
 impl SyntaxHighlighter for RustSyntaxHighlighter {
@@ -116,18 +168,19 @@ impl SyntaxHighlighter for RustSyntaxHighlighter {
         let mut result = Vec::new();
         let mut iterator = line.split_word_bound_indices().peekable();
 
+        if let Some(annotation) = self.initial_annotation(line) {
+            result.push(annotation);
+            while let Some(&(next_idx, _)) = iterator.peek() {
+                if next_idx >= annotation.end {
+                    break;
+                }
+                iterator.next();
+            }
+        }
+
         while let Some((start_idx, _)) = iterator.next() {
             let remainder = &line[start_idx..];
-            if let Some(mut annotation) = self
-                .annotate_ml_comment(remainder)
-                .or_else(|| annotate_comment(remainder))
-                .or_else(|| annotate_char(remainder))
-                .or_else(|| annnotate_lifetime_specifiers(remainder))
-                .or_else(|| annotate_number(remainder))
-                .or_else(|| annotate_keyword(remainder))
-                .or_else(|| annotate_type(remainder))
-                .or_else(|| annotate_known_value(remainder))
-            {
+            if let Some(mut annotation) = self.annotate_remainder(remainder) {
                 annotation.shift(start_idx);
                 result.push(annotation);
 

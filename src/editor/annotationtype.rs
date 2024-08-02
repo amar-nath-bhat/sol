@@ -10,4 +10,5 @@ pub enum AnnotationType {
     LifetimeSpecifier,
     Comment,
     MultilineComment,
+    String,
 }
