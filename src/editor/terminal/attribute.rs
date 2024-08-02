@@ -62,12 +62,16 @@ impl From<AnnotationType> for Attribute {
                 }),
                 background: None,
             },
-            AnnotationType::LifetimeSpecifiers => Self {
+            AnnotationType::LifetimeSpecifier => Self {
                 foreground: Some(Color::Rgb {
                     r: 255,
                     g: 191,
                     b: 0,
                 }),
+                background: None,
+            },
+            AnnotationType::Comment => Self {
+                foreground: Some(Color::Rgb { r: 0, g: 100, b: 0 }),
                 background: None,
             },
         }
