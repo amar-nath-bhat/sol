@@ -74,6 +74,14 @@ impl From<AnnotationType> for Attribute {
                 foreground: Some(Color::Rgb { r: 0, g: 100, b: 0 }),
                 background: None,
             },
+            AnnotationType::MultilineComment => Self {
+                foreground: Some(Color::Rgb {
+                    r: 0,
+                    g: 100,
+                    b: 100,
+                }),
+                background: None,
+            },
         }
     }
 }

@@ -1,6 +1,5 @@
 use super::{Annotation, AnnotationType, Line, SyntaxHighlighter};
 use crate::prelude::*;
-use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
 
 const KEYWORDS: [&str; 57] = [
@@ -72,18 +71,57 @@ const KNOWN_VALUES: [&str; 6] = ["Some", "None", "true", "false", "Ok", "Err"];
 
 #[derive(Default)]
 pub struct RustSyntaxHighlighter {
-    highlights: HashMap<LineIdx, Vec<Annotation>>,
+    highlights: Vec<Vec<Annotation>>,
+    ml_comment_balance: usize,
+}
+impl RustSyntaxHighlighter {
+    fn annotate_ml_comment(&mut self, string: &str) -> Option<Annotation> {
+        let mut chars = string.char_indices().peekable();
+
+        while let Some((_, char)) = chars.next() {
+            if char == '/' {
+                if let Some((_, '*')) = chars.peek() {
+                    self.ml_comment_balance = self.ml_comment_balance.saturating_add(1);
+                    chars.next();
+                }
+            } else if self.ml_comment_balance == 0 {
+                return None; // We saw no opener, and we are not currently in a ML comment, returning None
+            } else if char == '*' {
+                if let Some((idx, '/')) = chars.peek() {
+                    self.ml_comment_balance = self.ml_comment_balance.saturating_sub(1);
+
+                    if self.ml_comment_balance == 0 {
+                        return Some(Annotation {
+                            annotation_type: AnnotationType::MultilineComment,
+                            start: 0,
+                            end: idx.saturating_add(1),
+                        });
+                    }
+                    chars.next();
+                }
+            }
+        }
+
+        (self.ml_comment_balance > 0).then_some(Annotation {
+            annotation_type: AnnotationType::MultilineComment,
+            start: 0,
+            end: string.len(),
+        })
+    }
 }
 
 impl SyntaxHighlighter for RustSyntaxHighlighter {
     fn highlight(&mut self, idx: LineIdx, line: &Line) {
+        debug_assert_eq!(idx, self.highlights.len());
         let mut result = Vec::new();
         let mut iterator = line.split_word_bound_indices().peekable();
 
         while let Some((start_idx, _)) = iterator.next() {
             let remainder = &line[start_idx..];
-            if let Some(mut annotation) = annotate_char(remainder)
+            if let Some(mut annotation) = self
+                .annotate_ml_comment(remainder)
                 .or_else(|| annotate_comment(remainder))
+                .or_else(|| annotate_char(remainder))
                 .or_else(|| annnotate_lifetime_specifiers(remainder))
                 .or_else(|| annotate_number(remainder))
                 .or_else(|| annotate_keyword(remainder))
@@ -101,11 +139,11 @@ impl SyntaxHighlighter for RustSyntaxHighlighter {
                 }
             };
         }
-        self.highlights.insert(idx, result);
+        self.highlights.push(result);
     }
 
     fn get_annotations(&self, idx: LineIdx) -> Option<&Vec<Annotation>> {
-        self.highlights.get(&idx)
+        self.highlights.get(idx)
     }
 }
 
@@ -190,7 +228,6 @@ fn annotate_comment(string: &str) -> Option<Annotation> {
     }
     None
 }
-
 fn is_valid_number(word: &str) -> bool {
     if word.is_empty() {
         return false;
